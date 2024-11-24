@@ -90,17 +90,18 @@ For those who prefer direct control through the vast.ai interface:
    - Visit [vast.ai templates](https://cloud.vast.ai/templates/)
    - Either use our [pre-configured template](https://cloud.vast.ai/?ref_id=137438&template_id=6e39ce6b12abc8fcbf1f76350c99fc7c)
    - Or create your own with these specifications:
-     - Base Image: `ggerganov/llama.cpp:server-cuda-b4154`
-     - CUDA Version: 12.6+
-     - Minimum CPU RAM: 20GB
-     - Minimum GPU VRAM: 20GB
-     - Disk Space: 30GB minimum
+     - Image Path: `ghcr.io/ggerganov/llama.cpp:server-cuda-b4154`
+     - Docker Options: `-p 8081:8081`
+     - Launch Mode: `ssh`
+     - On-Start Script: `cd / && ./llama-server --hf-repo unsloth/Qwen2.5-Coder-32B-Instruct-128K-GGUF --hf-file Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf --host 0.0.0.0 --port 8081 --gpu-layers 65 -c 15000`
+     - Recommended Disk Space: 30GB minimum
 
 2. **Instance Selection**
    - Navigate to the vast.ai search page
+   - Make sure to select the right template you just created with allocated disk space of **minimum 30GB**.
    - Apply these filters:
-     - RAM: ≥20GB
-     - GPU: RTX 4090 (recommended)
+     - CPU RAM: ≥20GB
+     - GPU: RTX 4090 (recommended) / or a GPU with at least 20GB of VRAM
      - CUDA: ≥12.6
      - Location: Choose based on your region
    - Sort by "price inc." for best deals
