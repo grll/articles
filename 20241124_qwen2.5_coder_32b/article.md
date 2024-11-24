@@ -1,141 +1,222 @@
-# Your own SOTA code inference server with Qwen2.5-Coder-32B on Vast.ai
+# Get your own SOTA code inference server with Qwen2.5-Coder-32B at 0.3 $/hour
 
 ## Introduction
 
-Open source models like Qwen2.5-Coder are now matching and sometimes surpassing commercial models like GPT-4o, enabling powerful local AI development with full privacy and control.
+The landscape of AI coding assistants has dramatically shifted with the release of [Qwen2.5-Coder](https://arxiv.org/html/2409.12186v3), an open-source model that not only matches but often outperforms commercial solutions like GPT-4o. This breakthrough enables developers to build powerful, private AI development environments with complete control over their data and infrastructure.
 
-The best coding open source model to date is the Qwen2.5-Coder-32B which is a 32B parameters model with a context length of up to 130k tokens developed by Alibaba's Qwen Research team. The model has shown some impressive benchmark performance often seating between GPT-4o and Claude 3.5 sonnet:
+Qwen2.5-Coder-32B represents the current state-of-the-art in open-source coding models. With its 32-billion parameters and impressive 130k token context window, this model from Alibaba's Qwen Research team has demonstrated remarkable capabilities, positioning itself competitively between GPT-4o and Claude 3.5 Sonnet:
 
 ![qwen2.5 coder benchmark performance](images/qwen2.5_benchmark.png)
 
-If you are like most (me included) your hardware do not allow to run a model of that size at a decent speed.
+While the 32 billions parameters might seem daunting for local deployment, recent advances in quantization have made it surprisingly accessible. Through efficient compression techniques, it can now run on a single consumer-grade RTX 4090 GPU with a 15k token context window — making what once seemed impossible, entirely doable.
 
-Thanks to quantization the requirement to run such a model are drastically reduced and as it turns out it can even run on a single consumer grade GPU (RTX 4090) if we limit the context length to 15k tokens.
+For developers who don't want to invest in high-end hardware, vast.ai offers an elegant solution: RTX 4090 GPU instances for just $0.3 per hour. This makes enterprise-grade AI capabilities accessible to individual developers and small teams.
 
-Buying a GPU of that size is still an expensive investment however thanks to vast.ai we can easily rent a (RTX 4090) GPU for only 0.3 $/hour.
+This guide will walk you through creating your own state-of-the-art code inference server by combining:
 
-In this technical article, I will show you how to combine the power of Qwen2.5-Coder 32B, the efficient compression of quantization, the inference speed of llama.cpp server and the cheap price of vast.ai to run your very own fully private SOTA code inference server at only 0.3 $/hour. You will be able to generate code at 40 tokens per second surpassing typical reading speeds. We will finish by integrating the inference server into pearAI a Cursor open source alternative based on continue.dev.
+* Qwen2.5-Coder 32B's state of the art coding capabilities
+* Advanced quantization techniques for efficient deployment
+* llama.cpp's high-performance inference server
+* vast.ai's cost-effective GPU rentals
+
+The result? A private code generation server capable of producing 40 tokens per second — much faster than human reading speed — at a fraction of the cost of commercial solutions. We'll also show you how to integrate this server with pearAI, an open-source alternative to Cursor built on continue.dev, creating a seamless development experience.
 
 ## Prerequisites
 
-To follow along you need a vast.ai account that can be created for free here:
-https://cloud.vast.ai/create/
+Before getting started, ensure you have the following set up:
 
-Then you need to topup your account with a few dollars to cover the costs of the GPUs (0.3 $/hour).:
-https://cloud.vast.ai/billing/
-
-If you want to leverage the CLI script that comes with this article you also need vastAI CLI tool:
-https://cloud.vast.ai/cli/
+1. vast.ai Account
+  * [Create a free account](https://cloud.vast.ai/create/)
+  * This will be your gateway to accessing affordable GPU instances
+2. Account Balance
+  * [Add funds to your vast.ai account](https://cloud.vast.ai/billing/)
+  * A small initial deposit ($5-10) is sufficient to get started
+  * Instances cost approximately $0.3/hour
+3. Optional: CLI Setup
+  * If you plan to use our automated deployment script, install the [vast.ai CLI tool](https://cloud.vast.ai/cli/)
+  * This enables programmatic instance management and deployment
 
 ## Deploying Qwen2.5-Coder-32B
 
-We will deploy a 4 bit quantized version of the model provided by Daniel Han (@unsloth.ai) in GGUF format on hugging face: https://huggingface.co/unsloth/Qwen2.5-Coder-32B-Instruct-128K-GGUF/blob/main/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf. The GGUF format https://huggingface.co/docs/hub/gguf is a popular self contained binary format that contains all the necessary information to run the model (both metadata and weigths). It was created by @ggerganov the author of lamma.cpp from which we will also borrow the inference server code to deploy.
+We'll be deploying a highly optimized 4-bit quantized version of Qwen2.5-Coder-32B, created by Daniel Han (@unsloth.ai). The model is available in GGUF format—a self-contained binary format that packages both model weights and metadata for efficient deployment. The key advantage of this model is that it is just 20GB in size making it perfect for the 24GB VRAM on RTX 4090 GPUs.
 
-I provided 2 options to deploy the inference server: semi-automated via a script that will look at compatible instances on vast.ai, let you select among the best 3 options and then deploy the server for you. The other option consist in create a template in vast.ai UI and searching an instance manually. 
+**Model Details:**
+- Source: [unsloth/Qwen2.5-Coder-32B-Instruct-128K-GGUF](https://huggingface.co/unsloth/Qwen2.5-Coder-32B-Instruct-128K-GGUF/blob/main/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf)
+- Format: GGUF (developed by @ggerganov for llama.cpp)
+- Quantization: 4-bit for optimal performance/size balance
 
-### option 1: one-script deployment (recommended)
+### Deployment Options
 
-The fastest way to get your code inference up and running is through the `vastai_search.py` script.
+You have two methods to deploy the inference server via automated script (recommended) or via vast.ai manual UI.
 
-The script leverage the vast.ai CLI tool to search for compatible instances and then deploy the Qwen2.5-Coder-32B model on the selected instance.
+#### Option 1: Automated Script Deployment (Recommended)
 
-To run the script:
+This is the fastest and most straightforward method, using our provided script to handle instance selection and deployment automatically.
+
+1. Download the deployment script:
 
 ```bash
 wget https://raw.githubusercontent.com/grll/articles/main/20241124_qwen2.5_coder_32b/vastai_search.py
+```
+
+2. Run the script (choose one method):
+
+```bash
 python vastai_search.py
 ```
 
 or
 
 ```bash
-wget https://raw.githubusercontent.com/grll/articles/main/20241124_qwen2.5_coder_32b/vastai_search.py
 chmod +x vastai_search.py
 ./vastai_search.py
 ```
 
-The script will interactively prompt for instance selection after displaying options.
+The script will:
+- Search for compatible instances
+- Present the top 3 options based on price and performance
+- Handle deployment after you select an instance
+- Provide the inference server URL once ready
 
-when an instance is selected, the script will create a new instance on vast.ai and deploy the Qwen2.5-Coder-32B model on it.
+> Notes: 
+> * Initial setup takes approximately 10 minutes while the model downloads to your instance.
+> * The first query may take much longer to process the input text.
 
-You will get the URL of the inference server as soon as available by the script however note that it takes roughly 10 minutes to download the model on the instance.
+#### Option 2: Manual UI Deployment
 
-Navigate to the url provided to start using the inference server and model.
+For those who prefer direct control through the vast.ai interface:
 
-### option 2: manual deployment in vast.ai UI
+1. **Template Setup**
+   - Visit [vast.ai templates](https://cloud.vast.ai/templates/)
+   - Either use our [pre-configured template](https://cloud.vast.ai/?ref_id=137438&template_id=6e39ce6b12abc8fcbf1f76350c99fc7c)
+   - Or create your own with these specifications:
+     - Base Image: `ggerganov/llama.cpp:server-cuda-b4154`
+     - CUDA Version: 12.6+
+     - Minimum CPU RAM: 20GB
+     - Minimum GPU VRAM: 20GB
+     - Disk Space: 30GB minimum
 
-#### Template Creation
+2. **Instance Selection**
+   - Navigate to the vast.ai search page
+   - Apply these filters:
+     - RAM: ≥20GB
+     - GPU: RTX 4090 (recommended)
+     - CUDA: ≥12.6
+     - Location: Choose based on your region
+   - Sort by "price inc." for best deals
+   - Review total costs (including download bandwidth for the 20GB model)
+   - Click "Rent" on your chosen instance
 
-vast.ai relies on docker to isolate the renter's environment from the host's host environement. It additionally provides a template feature to help create docker images and store some parameters to deploy on vast.ai instances. Before renting an instance you must select a template containing the docker image and a few other settings defining how the instance will be created (for example storage requirements...). 
+## Monitoring your Qwen2.5-Coder-32B Inference Server
 
-Navigate to the template page in the vast.ai UI:
+After deployment, monitoring your instance is crucial for optimal performance and cost management. All monitoring features are accessible through the [vast.ai instances dashboard](https://cloud.vast.ai/instances/).
 
-https://cloud.vast.ai/templates/
+### Key Monitoring Features
 
-you can either use my public vast.ai template:
+1. **System Metrics**
+   - Real-time GPU utilization
+   - RAM usage
+   - CPU load
+   - Disk space consumption
+   - All viewable directly from the dashboard
 
-https://cloud.vast.ai/?ref_id=137438&template_id=6e39ce6b12abc8fcbf1f76350c99fc7c
+2. **Remote Access**
+   - SSH connectivity via the "Connect" button
+   - Direct access to instance logs through the "Logs" button
+   - Real-time debugging and troubleshooting capabilities
 
-or create your own template (by clicking the + create new template button) and filling the following:
+3. **Server Access Information**
+   - Click the blue IP address button to view:
+     - Public IP address
+     - Port mapping (by default port mapping to 8081)
+     - Connection details for your inference server
 
-[screenshot]
+### Quick Reference
 
-Note that we directly use the image from ggerganov/llama.cpp:server-cuda-b4154 which is a docker image containing everything to run llama.cpp server with CUDA GPU support. This particular image requires CUDA 12.6, also as the model in 4bit is roughly 20GB it is recommended to have at least 20GB of RAM and a GPU above 20GB of VRAM as well, RTX 4090 is a good choice.
+Your inference server will be accessible at:
+```
+http://<public_ip>:<port_mapping>
+```
+Where:
+- `<public_ip>` is your instance's public IP address
+- `<port_mapping>` is the mapped port (typically mapped to internal port 8081)
 
-#### Instance Creation
+> Tip: Bookmark your server's URL for easy access, but remember that the IP and port may change if you stop and restart your instance.
 
-Once the template has been created you can jump on the search page of vast.ai. Where you can see all the offers from various GPU owners.
+## Using your Qwen2.5-Coder-32B Inference Server
 
-Make sure to select the right template you just created with allocated disk space of minimum 30GB. 
+There are two primary ways to interact with your inference server: through the web interface for direct interactions, or by integrating it into your development environment for a more streamlined coding experience.
 
-Also make sure to have the following criterion when selecting an instance:
-- min 20GB of CPU RAM
-- filter for gpu name RTX 4090 (recommended)
-- filter for countries as you wish (recommended to have a region close to you)
-- minimum version of cuda 12.6
+### Web Interface Access
 
-It's recommended to sort results by "price inc." once your filters are set.
+llama.cpp provides a built-in web interface for immediate model interaction:
 
-You can review the details of the price by hovering over the "rent" button. Expect at least 20GB of download for the weights of the model.
-
-Once your happy with an instance, click on the "rent" button and navigate to the instances page: https://cloud.vast.ai/instances/
-where your instance should show up.
-
-## Monitoring your Qwen2.5-Coder-32B inference server
-
-Regardless of how you created the instance you will be able to monitor it in https://cloud.vast.ai/instances/.
-
-To monitor you can directly ssh within the instance with the "connect" button. You can also see RAM, GPU, CPU, disk usage from that page. You can also see the logs from the instance with the "logs" button. By clicking on the blue ip address button you will also see the public IP and the port mapping to 8081. This is the adress to connect to access your inference server.
-
-## Using your Qwen2.5-Coder-32b inference server
-
-### Using the web interface
-
-Llama.cpp server provides a web interface to interact with the model. You can access it at http://<public_ip>:<port_mapping>/ where <public_ip> is the public IP of your instance and <port_mapping> is the port mapping to 8081 that you can find in the instance page https://cloud.vast.ai/instances/.
-
-### Integrating it into your IDE for a Cursor like experience
-
-While Cursor do not allow at this time to bring your own LLM inference server. Cursor alternatives like continue.dev or PearAI allows it. To setup continue.dev or PearAI navigate to your config.json file for pearAI this is usually located at `~/.pearai/config.json` and add the following:
-
-```json
-    {
-      "title": "Qwen2.5-Coder-32B (llama.cpp Q4_K_M on vast.ai)",
-      "provider": "llama.cpp",
-      "model": "Qwen2.5-Coder-32B",
-      "apiBase": "http://<public_ip>:<port_mapping>"
-    }
+```
+http://<public_ip>:<port_mapping>/
 ```
 
-You will then be able to use it in `ctrl+l` interaction or in inline editing like `ctrl+i`.
+This interface offers:
+- Direct text input/output
+- Real-time response streaming
+- Basic parameter adjustment
+- Simple prompt testing
+
+### IDE Integration
+
+For a more powerful development experience, you can integrate the server directly into your IDE through pearAI or continue.dev, creating a Cursor-like experience.
+
+#### Configuration Setup
+
+1. Locate your pearAI configuration file:
+
+   ```
+   ~/.pearai/config.json
+   ```
+
+2. Add the following configuration block:
+
+   ```json
+   {
+     "title": "Qwen2.5-Coder-32B (llama.cpp Q4_K_M on vast.ai)",
+     "provider": "llama.cpp",
+     "model": "Qwen2.5-Coder-32B",
+     "apiBase": "http://<public_ip>:<port_mapping>"
+   }
+   ```
+
+#### Available IDE Commands
+
+After configuration, you can use these keyboard shortcuts (with PearAI or continue.dev):
+- `Ctrl+L`: Open interaction panel (chat)
+- `Ctrl+I`: Trigger inline code editing
+
+The newly created model will be available in the `Model` dropdown both in the panel and in the inline editor.
 
 ## Conclusion
 
-In this short technical article you learned how to deploy your own Qwen2.5-Coder-32B inference server on vast.ai rivalising in coding performances with openAI gpt-4o on a single GPU for only 0.3 $/hour. This is a huge step forward for OSS LLMs and will enable for sure many use cases and efficiency gain.
+This guide demonstrates a significant milestone in AI coding assistance. Open source models are finally catching up to become a viable alternative for coding tasks. 
 
+By leveraging several key technologies:
 
-thanks and references:
-* Qwen2 team for releasing Qwen2.5-Coder-32B open source see technical report https://arxiv.org/html/2409.12186v3
-* llama.cpp for providing a simple way to create an inference server.
-* Daniel Han at unsloth ai for quantizing the model and making it available on HF
-* vast.ai for providing a simple and easy to use API for GPU instances as well as extremly competitive prices 
-* pearAI / continue.dev for an open source alternative to Cursor
+* Qwen2.5-Coder-32B's powerful language model
+* Quantization techniques
+* llama.cpp's efficient inference server
+* vast.ai's affordable GPU infrastructure
+
+You can now deploy a private code generation system that:
+
+* Rivals GPT-4o in coding performance
+* Operates at 40 tokens per second
+* Costs only $0.3 per hour
+* Maintains complete privacy and control
+* Runs on a single GPU
+
+This brings what previously was enterprise-grade LLM capabilites at individual developer costs with full control, no dependency on commercial API providers and with a privacy first approach that every individuals and companies can adopt safely.
+
+## References & Acknowledgements
+
+* Qwen2 team for the impressive Qwen2.5-Coder open source release see [technical report](https://arxiv.org/html/2409.12186v3).
+* [llama.cpp](https://github.com/ggerganov/llama.cpp) for providing a simple way to create an efficient LLM inference server.
+* Daniel Han at [unsloth ai](https://unsloth.ai) for quantizing the model and making it available on [Hugging Face](https://huggingface.co/unsloth/Qwen2.5-Coder-32B-Instruct-128K-GGUF/blob/main/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf).
+* [vast.ai](https://vast.ai) for providing a simple and easy to use API for GPU instances as well as extremly competitive prices.
+* [pearAI](https://trypear.ai/) / [continue.dev](https://www.continue.dev/) for an open source alternative to Cursor that supports local model.
